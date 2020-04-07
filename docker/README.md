@@ -22,7 +22,7 @@ Lets break it down:
 	docker run [OPTIONS] IMAGE [COMMAND] [ARGS]
 
 **run -**  Run a command in a new container (more on command later).
-**--rm -** Delete the container once it exists, good for housekeeping.
+**\-\-rm -** Delete the container once it exists, good for housekeeping.
 **-i -**  Interactive mode.
 **-t -** Allocates a TTY.
 **alpine -** [Alpine](https://hub.docker.com/_/alpine) is a minimal docker image with a basic Linux. Checkout [Docker Hub](https://hub.docker.com/search) for more pre-built images you can use out of the box.
@@ -155,9 +155,30 @@ Build context once again. As mentioned before, when issuing a docker build comma
 If the answer is *no*, then you should use a .dockerignore file. It's exactly like .gitignore and other ignore files. The .dockerignore file specificy which files should not be part of the build context, which allows us the minimize the build context.
 
 
-### apt like a pro
-
-### Watch the Cache
 ### Fine Layers
 
+Docker images build time can get long pretty fast. Long build time also means long fetching time and is generally bad. What makes a big image? Big layers.
+What are layers? A Docker image consists of many layers, each layer is an instruction from the Dockerfile.
+Big layers are layers that require memory, like an `ADD` that adds to the image a 250mb archive. This will cause the layer to be atleast 250mb in size (it will be more than that, because ADD also decompresses the archive). Big layers are inevitable, but we should try making them as small as possible. Consider the following:
+
+	RUN apt update && apt install -y build-essential
+
+The update command caches the updated lists under /var/lib/apt/lists, this cache can easily be 50mb which we dont need. So when using apt update, we will delete the content of this directory after installing the packages we want.
+
+	RUN apt update && apt install -y ... && rm -rf /var/lib/apt/lists/*
+
+### Watch the Cache
+
+Docker caches layers to reduce build times, this is nice but can cause problems. For example, if we execute:
+
+	RUN apt update && apt install -y foo
+
+A layer will be generated and cached, and next time we run this instruction the cache will be used. But what happens if a new version of *foo* is released? The out-dated cached version will still be used!
+
+To workaround this we either specifiy *\-\-no-cache* when building, or use some method of *"cache busting"* (read about that online, there is a ton of hacks to cache bust). The proper cache busting soltuion in the case of apt, is to use specific versions of the packages, thus when we update to a new version, the cache will be invalidated, and the layer will re-generate.
+
 ## Working offline
+
+The big problem with working offline is getting the pre-built images from docker hub. There are 2 solution for this:
+1. Use `docker save`. This generates a tarball of the image you can later `docker load`.
+2. Use  **[NotGlop/docker-drag](https://github.com/NotGlop/docker-drag)**, which allows you to download images from docker hub without having docker installed.
